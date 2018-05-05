@@ -1,0 +1,3 @@
+VERBOSE = False
+#VERBOSE = True
+ 
