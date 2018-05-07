@@ -7,6 +7,6 @@ Jupyter notebook, Python 3.5, numpy, pytorch 0.4, Matplotlib is also used to plo
 
 # STILL UNDER DEVELOPMENT
 ## Progress
-1. Implement S encoder + S classifier and achieve 99%+ accuracy in MNIST data set [***Working***]
-2. Implement Decoder and Adversarial net and whole net on MNIST
-3. Test it on Sprites data set 
+1. Implement S encoder + S classifier and achieve 99%+ accuracy in MNIST data set [***Done.But only get 97% accuracy***]
+2. Implement Decoder and Adversarial net and whole net on MNIST[***Done. But unstable***]
+3. Test it on Sprites data set [***working***] 
