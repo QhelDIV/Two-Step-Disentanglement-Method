@@ -1,11 +1,14 @@
 # config file for MNIST dataset
 
 ####### SYS CONFIG ########
-learning_rate = 1e-4
+# learning settings
+learning_rate = 1e-3
+adam_beta = (0.1,0.9)
+
 adv_disent_ratio = 4
 
 recon_w  = 5
-adv_w   = -10
+adv_w   = -1
 
 # general config
 img_size    = 28

@@ -25,7 +25,7 @@ class ConvLayer(nn.Module):
             self.bn = nn.BatchNorm2d(conv_channel)
         if upsampling==True:
             self.upsampling = True
-            self.Upsampler = nn.Upsample(scale_factor=2, mode='bilinear')
+            self.Upsampler = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
         
     def forward(self, x):
         if VERBOSE:
@@ -83,21 +83,12 @@ class DisentNet(nn.Module):
         
         self.z_enc = Z_Encoder
         self.decoder=SZ_Decoder
-        
-        self.set_trainable(trainable=True)
     def get_z_encoder(self):
         return self.z_enc
     def get_decoder(self):
         return self.decoder
-    def set_trainable(self, trainable=True):
-        if trainable==True:
-            set_trainable(self.z_enc,True)
-            set_trainable(self.decoder,True)
-        else:
-            set_trainable(self.z_enc,False)
-            set_trainable(self.decoder,False)
     def forward(self, s_latent, x):
-        z_latent = self.z_enc(x).detach()
+        z_latent = self.z_enc(x)
         latent = torch.cat((s_latent,z_latent),dim=1)
         reconstructed = self.decoder(latent)
         return reconstructed
@@ -107,21 +98,33 @@ class AdvNet(nn.Module):
         super().__init__()
         
         self.z_enc = Z_Encoder
-        self.adv = Adv
-        
-        self.set_trainable(trainable=True)
-    def set_trainable(self, trainable=True):
-        #set_trainable(self.z_enc,False)
-        if trainable==True:
-            set_trainable(self.adv,True)
-        else:
-            set_trainable(self.adv,False)
-        
+        self.adv = Adv     
     def forward(self, x):
-        z_latent = self.z_enc(x).detach()
+        z_latent = self.z_enc(x)
         scores = self.adv(z_latent)
         return scores
+    
+    
+class ReconNet(nn.Module):
+    def __init__(self, S_Encoder, Z_Encoder, SZ_Decoder):
+        super().__init__()
+        
+        self.s_enc = S_Encoder
+        self.z_enc = Z_Encoder
+        self.sz_dec= SZ_Decoder
+    def forward(self, x):
+        s_latent = self.s_enc(x)
+        z_latent = self.z_enc(x)
+        print('z_latent_norm:',torch.norm(z_latent))
+        
+        latent = torch.cat((s_latent,z_latent),dim=1)
+        
+        reconstructed = self.sz_dec(latent)
+        
+        return reconstructed
 
+    
+    
         
 ################## TEST LAYERS ####################
 class DecoderTest(nn.Module):
@@ -132,7 +135,7 @@ class DecoderTest(nn.Module):
         self.encoder = S_Encoder
         self.decoder = SZ_Decoder
     def forward(self, x):
-        s1_latent = self.encoder(x).detach()
+        s1_latent = self.encoder(x)
         s2_latent = s1_latent
         
         latent = torch.cat((s1_latent,s1_latent),dim=1)
