@@ -129,11 +129,13 @@ class ClassifierSolver(Solver):
                 print('Got %d / %d correct (%.2f)' % (num_correct, num_samples, 100 * acc))
         return acc
 class DisAdvSolver(Solver):
-    def __init__(self, s_enc=None, z_enc=None, sz_dec=None, z_adv=None, dloader=None, params=None, loading=False, loadPath = var_save_path, loadSuffix = ''):
+    def __init__(self, s_enc=None, z_enc=None, sz_dec=None, z_adv=None, dloader=None, params=None, loading=False, loadPath = var_save_path, loadSuffix = '', model_name = '', saving_while_training=False):
         super().__init__(dloader, params)
         
         self.dloader  = dloader
         self.params = params
+        self.model_name = model_name
+        self.saving_while_training = saving_while_training
         
         if loading==False:
             self.s_enc = s_enc; self.s_enc.m_name = 's_enc';
@@ -165,6 +167,8 @@ class DisAdvSolver(Solver):
         self.reconSolver = ReconSolver(layers.ReconNet(self.s_enc,self.z_enc,self.sz_dec), self.dloader, self.params)
 
         self.show_every = 2000
+        self.save_num = 1
+        self.save_every = dloader.iter_per_epoch
         self.log_every = 100
         self.adv_disent_ratio = self.params.adv_disent_ratio
 
@@ -262,6 +266,9 @@ class DisAdvSolver(Solver):
         dloader = self.dloader
         self.max_it_count = dloader.iter_per_epoch * epochs
         self.cur_it_count = 0
+        self.save_count = 0
+        self.save_num = 6
+        self.save_every = dloader.iter_per_epoch * epochs // self.save_num
         
         for epoch in range(epochs):
             for it, (x,y) in enumerate(dloader.loader_train):
@@ -311,9 +318,9 @@ class DisAdvSolver(Solver):
                     self.z_classifier = ClassifierSolver(self.z_enc,self.z_adv, self.dloader, self.params)
                     adv_acc = self.z_classifier.test(mode='test',silence=True)
                     self.train_log['adv_acc'].append( adv_acc )
-                    print('progress: %.2f, lastes loss, recon:%.4f, disent:%.4f, adv:%.4f ' % (self.cur_it_count/self.max_it_count, disent_recon_loss, disent_loss, adv_loss))
+                    print('progress: %.2f, lastes loss, recon:%.4f, disent:%.4f, adv:%.4f ' % (self.cur_it_count/self.max_it_count, disent_recon_loss, disent_loss, adv_loss), end= '\r')
                 if (self.it_count % self.show_every == 0):
-                    
+                    print()
                     print('Iter: {}, rencon_loss: {:.4}, disent_loss:{:.4}, adv_loss: {:.4}'.format(self.it_count, disent_recon_loss, disent_loss, adv_loss))
                     print('adv classifier accuracy:')
                     self.z_classifier = ClassifierSolver(self.z_enc,self.z_adv, self.dloader, self.params)
@@ -326,9 +333,9 @@ class DisAdvSolver(Solver):
                     self.reconSolver.test()
                     plt.show()
                     
-                    
-                    utils.save_models(self.save_list, mode='iter', mode_param=self.it_count)
-                    
+                if self.saving_while_training==True and self.it_count%self.save_every==0:
+                    self.save_count += 1
+                    self.save_model(suffix = self.model_name+'_num'+str(self.save_count))
                     print()
                 # it_count is total accumulated count, while cur_it_count is count in this training session
                 self.it_count += 1
@@ -348,7 +355,9 @@ class DisAdvSolver(Solver):
         recon_loss_hist = [tup[0] for tup in loss_hist]
         plt.plot(recon_loss_hist)
         plt.show()
-    def save_model(self,path = var_save_path, suffix = ''):
+    def save_model(self,path = var_save_path, suffix = None):
+        if suffix is None:
+            suffix = self.model_name
         save_list = [self.s_enc, self.z_enc, self.sz_dec, self.z_adv]
         save_list[0].m_name = 's_enc';         save_list[1].m_name = 'z_enc';
         save_list[2].m_name = 'sz_dec';        save_list[3].m_name = 'z_adv';
@@ -364,15 +373,16 @@ class HPTuner():
     def __init__(self,s_enc, dloader, params):
         
         self.combinations = params.hyperparam_combinations()
-        self.epoch_num = 800
+        self.epoch_num = 100
         self.index = 0
         self.max_index = len(self.combinations)
         self.dloader = dloader
         self.params = params
         self.s_enc = s_enc
         
-    def tune(self):
-    
+    def tune(self, epoch_num=100):
+        
+        self.epoch_num = epoch_num
         is_saving = False
         save_list = []
         try:

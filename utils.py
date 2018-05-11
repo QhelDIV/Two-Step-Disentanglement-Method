@@ -66,17 +66,17 @@ class dataLoader():
         mnist_train = dset.MNIST('./datasets/MNIST_data', train=True, download=False,
                                    transform=img_transform)
         self.loader_train = DataLoader(mnist_train, batch_size=self.batch_size,
-                                  sampler=ChunkSampler(self.NUM_TRAIN, 0))
+                                  sampler=ChunkSampler(self.NUM_TRAIN, 0),num_workers=8)
 
         mnist_val = dset.MNIST('./datasets/MNIST_data', train=True, download=False,
                                    transform=img_transform)
         self.loader_val = DataLoader(mnist_val, batch_size=self.batch_size,
-                                sampler=ChunkSampler(self.NUM_VAL, self.NUM_TRAIN))
+                                sampler=ChunkSampler(self.NUM_VAL, self.NUM_TRAIN),num_workers=8)
 
         mnist_test = dset.MNIST('./datasets/MNIST_data', train=False, download=False,
                                    transform=img_transform)
         self.loader_test = DataLoader(mnist_test, batch_size=self.batch_size,
-                                sampler=ChunkSampler(self.NUM_TEST,0))
+                                sampler=ChunkSampler(self.NUM_TEST,0),num_workers=8)
         
         # group images by class name
         self.img_grouped = [[] for i in range(self.params.classes_num)]
