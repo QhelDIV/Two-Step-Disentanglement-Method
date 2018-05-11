@@ -19,8 +19,7 @@ import matplotlib.gridspec as gridspec
 import datetime
 
 from config import *
-import params
-from params import img_size,img_channel
+from params import *
 
 
 
@@ -37,24 +36,31 @@ class ChunkSampler(sampler.Sampler):
 
     def __iter__(self):
         return iter(range(self.start, self.start + self.num_samples))
-
+ 
     def __len__(self):
         return self.num_samples
     
 class dataLoader():
     def __init__(self, dset_name, dset_path='./datasets/'):
         if dset_name == 'MNIST':
+            self.params=MNISTParameters()
             self.setup_MNIST()
+        if dset_name == 'SPRITES':
+            self.params=SPRITESParameters()
+            self.setup_SPRITES()
+        self.iter_per_epoch = self.NUM_TRAIN // self.batch_size
     def setup_MNIST(self):
         self.NUM_TRAIN = 50000
         self.NUM_VAL = 5000
         self.NUM_TEST= 5000
+        img_size = self.params.img_size
+        img_channel = self.params.img_channel
 
-        self.batch_size = 128
+        self.batch_size = self.params.batch_size
         
         img_transform = T.Compose([
             T.ToTensor(),
-            T.Normalize((0, 0, 0), (1, 1, 1))
+            T.Normalize((0,)*img_channel, (1,)*img_channel)
         ])
 
         mnist_train = dset.MNIST('./datasets/MNIST_data', train=True, download=False,
@@ -73,14 +79,14 @@ class dataLoader():
                                 sampler=ChunkSampler(self.NUM_TEST,0))
         
         # group images by class name
-        self.img_grouped = [[] for i in range(params.classes_num)]
+        self.img_grouped = [[] for i in range(self.params.classes_num)]
         for it, (xbat,ybat) in enumerate(self.loader_test):
             for i in range(len(ybat)):
                 x = xbat[i]
                 y = ybat[i]
                 self.img_grouped[y.item()].append( x.view(img_size ** 2) )
                 
-        self.imgs = self.loader_test.__iter__().next()[0].view(self.batch_size, img_size*img_size).numpy().squeeze()
+        self.imgs = self.loader_test.__iter__().next()[0].view(self.batch_size, img_channel*img_size*img_size).numpy().squeeze()
         
     def show_imgs(self):
         showed = [self.img_grouped[2][i] for i in range(20)]
@@ -94,10 +100,14 @@ def print_info():
     print('data type:', dtype)
     print('VERBOSE==',VERBOSE)
 
-def show_images(images):
-    images = np.reshape(images, [images.shape[0], -1])  # images reshape to (batch_size, D)
+def show_images(images,params):
+    img_size = params.img_size
+    img_channel = params.img_channel
+    
+    images = torch.tensor(images)
+    images = images.view([images.shape[0], img_channel, img_size, img_size])  # images reshape to (batch_size, D)
     sqrtn = int(np.ceil(np.sqrt(images.shape[0])))
-    sqrtimg = int(np.ceil(np.sqrt(images.shape[1])))
+    sqrtimg = img_size
 
     fig = plt.figure(figsize=(sqrtn, sqrtn))
     gs = gridspec.GridSpec(sqrtn, sqrtn)
@@ -109,10 +119,13 @@ def show_images(images):
         ax.set_xticklabels([])
         ax.set_yticklabels([])
         ax.set_aspect('equal')
-        plt.imshow(img.reshape([sqrtimg,sqrtimg]))
+        img = img.permute(1,2,0).numpy()
+        if img.shape[2]==1:
+            img = img.reshape(img.shape[0],img.shape[1])
+        plt.imshow(img)
     return 
 def count_params(model):
-    """Count the number of parameters in the current TensorFlow graph """
+    """Count the number of parameters in the current computation graph """
     param_count = np.sum([np.prod(p.size()) for p in model.parameters()])
     return param_count
 def preprocess_img(x):
@@ -139,10 +152,16 @@ def save_models(models, path = var_save_path, mode='time', mode_param = 0):
         suffix = get_time()
     elif mode=='iter':
         suffix = str(mode_param)
+    elif mode=='param':
+        suffix = str(mode_param)
     for model in make_list(models):
         torch.save(model.state_dict(),path+ model.m_name + suffix)
         #torch.save(model,path+ model.m_name + 'MODEL' + suffix)
-def load_models(models, path = load_path):
+def load_models(models, path = load_path, suffix=''):
     for model in make_list(models):
-        #model.load_state_dict(torch.load(path + model.m_name))
-        torch.load(path+model.m_name)
+        print(path + model.m_name + suffix)
+        model.load_state_dict(torch.load(path + model.m_name + suffix))
+        #torch.load(path+model.m_name)
+def tort(x):
+    # this func should pass (0,0) and (1,1)
+    return -1000*x**2+1001*x
