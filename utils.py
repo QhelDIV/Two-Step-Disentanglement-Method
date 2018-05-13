@@ -49,6 +49,10 @@ class dataLoader():
             self.params=SPRITESParameters()
             self.setup_SPRITES()
         self.iter_per_epoch = self.NUM_TRAIN // self.batch_size
+    def setup_SPRITES(self):
+        self.NUM_TRAIN = 50000
+        self.NUM_VAL = 5000
+        self.NUM_TEST= 5000
     def setup_MNIST(self):
         self.NUM_TRAIN = 50000
         self.NUM_VAL = 5000
@@ -147,7 +151,7 @@ def make_list(obj):
         return [obj]
     return obj
     
-def save_models(models, path = var_save_path, mode='time', mode_param = 0):
+def save_models(models, path = var_save_path, mode='time', mode_param = None):
     if mode=='time':
         suffix = get_time()
     elif mode=='iter':
@@ -159,8 +163,8 @@ def save_models(models, path = var_save_path, mode='time', mode_param = 0):
         #torch.save(model,path+ model.m_name + 'MODEL' + suffix)
 def load_models(models, path = load_path, suffix=''):
     for model in make_list(models):
-        print(path + model.m_name + suffix)
-        model.load_state_dict(torch.load(path + model.m_name + suffix))
+        loaded = torch.load(path + model.m_name + suffix)
+        model.load_state_dict(loaded)
         #torch.load(path+model.m_name)
 def tort(x):
     # this func should pass (0,0) and (1,1)

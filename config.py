@@ -5,6 +5,7 @@ dtype = torch.float32 # we will be using float throughout this tutorial
 
 if USE_GPU and torch.cuda.is_available():
     device = torch.device('cuda')
+    GPU_IDs = [0,1,2,3]
 else:
     device = torch.device('cpu')
     if USE_GPU == True:

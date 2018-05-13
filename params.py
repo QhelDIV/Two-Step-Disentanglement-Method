@@ -4,10 +4,10 @@ import itertools
 class Parameters:
     def __init__(self): 
         ####### hyperparameters candidates #######
-        self.learning_rates = [5e-3,1e-3,5e-4]
+        self.learning_rates = [1e-3]
         self.adam_betas = [(0.9,0.999)]
-        self.adv_ws = [-0.1,-0.05]
-        self.adv_disent_ratios = [3,4,5]
+        self.adv_ws = [-2]
+        self.adv_disent_ratios = [4]
 
         ####### SYS CONFIG ########
         self.batch_size = 256
@@ -17,10 +17,10 @@ class Parameters:
         self.DATASET_NAME = 'UNDETERMINT'
         #DATASET_NAME = 'SPRITES'
 
-        self.adv_disent_ratio = 6
+        self.adv_disent_ratio = 4
         
         self.recon_w  = 1
-        self.adv_w   = -0.1
+        self.adv_w   = -2
         
         # enc, dec config
         self.encdec_dense_size   = 256
@@ -33,7 +33,7 @@ class Parameters:
         self.s_enc_bn = False
         self.s_enc_dim= 16
 
-        self.z_enc_bn = True
+        self.z_enc_bn = False
         self.z_enc_dim= 16
 
         # classifier
@@ -44,7 +44,7 @@ class Parameters:
         # Decoder config
         self.dec_conv_filter_size = 5
         self.dec_conv_channel    = 16
-        self.dec_use_bn        = True
+        self.dec_use_bn        = False
 
         # Adv net config
         # same with s classifier

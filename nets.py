@@ -31,6 +31,8 @@ def Encoder(img_size, in_channel, conv_channel, filter_size, latent_dim, dense_s
         layers.Dense(flatten_img_size, dense_size),
         layers.Dense(dense_size,       latent_dim)
     )
+    model = model.to(device=device, dtype=dtype)
+    model = torch.nn.DataParallel(model, device_ids = GPU_IDs)
     return model
 def Classifier(input_dim, dense_size, s_classes, bn):
     
@@ -39,6 +41,8 @@ def Classifier(input_dim, dense_size, s_classes, bn):
         layers.Dense(dense_size, dense_size, bn=bn),
         layers.Dense(dense_size, s_classes,  bn=bn)
     )
+    model = model.to(device=device, dtype=dtype)
+    model = torch.nn.DataParallel(model, device_ids = GPU_IDs)
     return model
 def Decoder(s_dim, z_dim, img_size, img_channel, conv_channel, filter_size, dense_size, bn):
     # TODO
@@ -59,6 +63,8 @@ def Decoder(s_dim, z_dim, img_size, img_channel, conv_channel, filter_size, dens
         layers.ConvLayer(inner_conv_channel,    conv_channel, filter_size, stride=1, padding=pad, bn=bn, upsampling=True),
         layers.ConvLayer(conv_channel,    img_channel,       filter_size, stride=1, padding=pad, bn=bn, upsampling=False),
     )
+    model = model.to(device=device, dtype=dtype)
+    model = torch.nn.DataParallel(model, device_ids = GPU_IDs)
     return model
 def AdvLayer(input_dim, dense_size, s_classes, bn):
     # same structure as Classifier
@@ -74,7 +80,7 @@ def S_Encoder(params):
     latent_dim = params.s_enc_dim
     
     model = Encoder(img_size, in_channel, conv_channel, filter_size, latent_dim, dense_size, bn)
-    model.m_name='s_encoder'
+    model.m_name='s_enc'
     return model
 def Z_Encoder(params):
     conv_channel= params.enc_conv_channel
@@ -86,7 +92,7 @@ def Z_Encoder(params):
     latent_dim = params.z_enc_dim
     
     model = Encoder(img_size, in_channel, conv_channel, filter_size, latent_dim, dense_size, bn)
-    model.m_name='z_encoder'
+    model.m_name='z_enc'
     return model
 def S_Classifier(params):
     input_dim   = params.s_enc_dim
@@ -115,7 +121,7 @@ def SZ_Decoder(params):
     dense_size  = params.encdec_dense_size
     bn           = params.dec_use_bn
     model = Decoder(s_dim, z_dim, img_size, img_channel, conv_channel, filter_size, dense_size, bn)
-    model.m_name='sz_decoder'
+    model.m_name='sz_dec'
     return model
 
 def test_Encoder(model,params):

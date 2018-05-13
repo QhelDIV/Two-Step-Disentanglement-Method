@@ -8,6 +8,8 @@ from torch.nn import init
 
 import matplotlib.pyplot as plt
 
+import copy
+
 from params import *
 from config import *
 import utils
@@ -42,6 +44,8 @@ class Solver():
         #optimizer = optim.Adam( filter(lambda p: p.requires_grad, model.parameters() ), lr=1e-4, betas=(0.5,0.999))
         if which=='adam':
             optimizer = optim.Adam( model.parameters(), lr=self.params.learning_rate, betas=self.params.adam_beta)
+        elif which=='SGD':
+            optimizer = optim.SGD( model.parameters(), lr = self.params.learning_rate, momentum=0.9)
         return optimizer
 
 class ReconSolver(Solver):
@@ -138,17 +142,17 @@ class DisAdvSolver(Solver):
         self.saving_while_training = saving_while_training
         
         if loading==False:
-            self.s_enc = s_enc; self.s_enc.m_name = 's_enc';
-            self.z_enc = z_enc; self.z_enc.m_name = 'z_enc';
-            self.sz_dec = sz_dec; self.sz_dec.m_name = 'sz_dec';
-            self.z_adv = z_adv; self.z_adv.m_name = 'z_adv';
+            self.s_enc = s_enc
+            self.z_enc = z_enc
+            self.sz_dec = sz_dec
+            self.z_adv = z_adv
         else:
-            self.z_enc = nets.Z_Encoder(self.params).to(device=device, dtype=dtype)
-            self.z_adv = nets.Z_AdvLayer(self.params).to(device=device, dtype=dtype)
-            self.sz_dec= nets.SZ_Decoder(self.params).to(device=device, dtype=dtype)
-            self.s_enc = nets.S_Encoder(self.params).to(device=device, dtype=dtype)
+            self.z_enc = nets.Z_Encoder(self.params)
+            self.z_adv = nets.Z_AdvLayer(self.params)
+            self.sz_dec= nets.SZ_Decoder(self.params)
+            self.s_enc = nets.S_Encoder(self.params)
+        if loading==True:
             self.load_model(loadPath,loadSuffix)
-
         
         self.recon_w = self.params.recon_w
         self.adv_w = self.params.adv_w
@@ -162,7 +166,7 @@ class DisAdvSolver(Solver):
         
         self.z_enc_solver = self.get_optimizer(self.z_enc)
         self.sz_dec_solver = self.get_optimizer(self.sz_dec)
-        self.z_adv_solver = self.get_optimizer(self.z_adv)
+        self.z_adv_solver = self.get_optimizer(self.z_adv, which = 'SGD')
 
         self.reconSolver = ReconSolver(layers.ReconNet(self.s_enc,self.z_enc,self.sz_dec), self.dloader, self.params)
 
@@ -184,8 +188,8 @@ class DisAdvSolver(Solver):
             layers.set_trainable(self.z_adv,True)
         elif mode == 'adversarial':
             layers.set_trainable(self.s_enc,False)
-            layers.set_trainable(self.z_enc,True)
-            layers.set_trainable(self.sz_dec,True)
+            layers.set_trainable(self.z_enc,False)
+            layers.set_trainable(self.sz_dec,False)
             layers.set_trainable(self.z_adv,True)
         elif mode == 'init':
             layers.set_trainable(self.s_enc,True)
@@ -268,7 +272,9 @@ class DisAdvSolver(Solver):
         self.cur_it_count = 0
         self.save_count = 0
         self.save_num = 6
+        self.show_num = 1
         self.save_every = dloader.iter_per_epoch * epochs // self.save_num
+        self.show_every = dloader.iter_per_epoch * epochs // self.show_num
         
         for epoch in range(epochs):
             for it, (x,y) in enumerate(dloader.loader_train):
@@ -315,23 +321,8 @@ class DisAdvSolver(Solver):
                     
                 if (self.it_count % self.log_every ==0):
                     self.train_log['loss'].append((disent_recon_loss, adv_loss, disent_loss))
-                    self.z_classifier = ClassifierSolver(self.z_enc,self.z_adv, self.dloader, self.params)
-                    adv_acc = self.z_classifier.test(mode='test',silence=True)
-                    self.train_log['adv_acc'].append( adv_acc )
                     print('progress: %.2f, lastes loss, recon:%.4f, disent:%.4f, adv:%.4f ' % (self.cur_it_count/self.max_it_count, disent_recon_loss, disent_loss, adv_loss), end= '\r')
-                if (self.it_count % self.show_every == 0):
-                    print()
-                    print('Iter: {}, rencon_loss: {:.4}, disent_loss:{:.4}, adv_loss: {:.4}'.format(self.it_count, disent_recon_loss, disent_loss, adv_loss))
-                    print('adv classifier accuracy:')
-                    self.z_classifier = ClassifierSolver(self.z_enc,self.z_adv, self.dloader, self.params)
-                    adv_acc = self.z_classifier.test(mode='test')
-                    
-                    self.test_disentangle()
-                    
-                    self.show_switch_latent(4)
-                    self.show_interpolated(4)
-                    self.reconSolver.test()
-                    plt.show()
+
                     
                 if self.saving_while_training==True and self.it_count%self.save_every==0:
                     self.save_count += 1
@@ -340,11 +331,25 @@ class DisAdvSolver(Solver):
                 # it_count is total accumulated count, while cur_it_count is count in this training session
                 self.it_count += 1
                 self.cur_it_count += 1
+        
+        test_adv = nets.Z_AdvLayer(self.params)
+        z_enc_clone = copy.deepcopy(self.z_enc)
+        self.z_classifier = ClassifierSolver(z_enc_clone, test_adv, self.dloader, self.params)
+        adv_acc = self.z_classifier.test(mode='test')
+
+        self.test_disentangle()
+
+        self.show_switch_latent(8)
+        self.show_interpolated(8)
+        self.reconSolver.test()
+        plt.show()
     def test_disentangle(self):
         # S_Classifier and Z_AdvLayer are same, except input dimension...
         print('training a classifier on top of z encoder...')
         self.z_adv = nets.Z_AdvLayer(self.params)
-        z_enc_tester = ClassifierSolver(self.z_enc, self.z_adv ,self.dloader, self.params)
+        z_enc_clone = copy.deepcopy(self.z_enc)
+        z_adv_clone = copy.deepcopy(self.z_adv)
+        z_enc_tester = ClassifierSolver(z_enc_clone, z_adv_clone ,self.dloader, self.params)
         z_enc_tester.train(1,freeze_enc=True,silence=True)
         print('testing this classifier...')
         z_enc_tester.test(mode='test')
@@ -394,10 +399,10 @@ class HPTuner():
                 print(hyperparameters)
                 print()
 
-                z_enc = nets.Z_Encoder(self.params).to(device=device, dtype=dtype); z_enc.m_name = 'z_enc';
-                z_adv = nets.Z_AdvLayer(self.params).to(device=device, dtype=dtype); z_adv.m_name = 'z_adv';
-                sz_dec= nets.SZ_Decoder(self.params).to(device=device, dtype=dtype); sz_dec.m_name = 'sz_dec';
-                s_enc = self.s_enc.to(device=device, dtype=dtype); s_enc.m_name = 's_enc';
+                z_enc = nets.Z_Encoder(self.params)
+                z_adv = nets.Z_AdvLayer(self.params)
+                sz_dec= nets.SZ_Decoder(self.params)
+                s_enc = self.s_enc
                 solver = DisAdvSolver(s_enc, z_enc, sz_dec, z_adv, self.dloader, self.params)
                 solver.show_every = self.dloader.iter_per_epoch * self.epoch_num
 
