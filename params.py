@@ -10,9 +10,9 @@ class Parameters:
         self.adv_disent_ratios = [4]
 
         ####### SYS CONFIG ########
-        self.batch_size = 256
+        self.batch_size = 256 
         # learning settings
-        self.learning_rate =.001
+        self.learning_rate =1e-3
         self.adam_beta = (0.9,0.999)
         self.DATASET_NAME = 'UNDETERMINT'
         #DATASET_NAME = 'SPRITES'
@@ -20,7 +20,7 @@ class Parameters:
         self.adv_disent_ratio = 4
         
         self.recon_w  = 1
-        self.adv_w   = -2
+        self.adv_w   = -.5
         
         # enc, dec config
         self.encdec_dense_size   = 256
@@ -38,7 +38,6 @@ class Parameters:
 
         # classifier
         self.classifier_dense_size = 256
-        self.classes_num = 10
         self.classifier_use_bn = True
 
         # Decoder config
@@ -59,9 +58,21 @@ class MNISTParameters(Parameters):
         self.DATASET_NAME = 'MNIST'
         self.img_size    = 28
         self.img_channel = 1
+        self.classes_num = 10
+        self.interpolated_tuples = ((2,0),(6,0))
 class SPRITESParameters(Parameters):
     def __init__(self):
         super().__init__()
         self.DATASET_NAME = 'SPRITES'
-        self.img_size    = 60
+        self.img_size    = 32
         self.img_channel = 3
+        self.classes_num = 336
+        self.batch_size = 128
+        
+        self.show_classes_num = 10
+        self.show_classes = [(1,0),(4,0),(50,0),(100,0),(150,0),(200,0),(225,0),(250,0),(275,0),(300,0)]
+        
+        self.interpolated_tuples = ((59,2),(332,2))
+        
+        self.s_enc_dim= 32
+        self.z_enc_dim= 128

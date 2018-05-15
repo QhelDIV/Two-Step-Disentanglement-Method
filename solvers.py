@@ -52,15 +52,23 @@ class ReconSolver(Solver):
     def __init__(self,model, dloader,params):
         super().__init__(dloader, params)
         self.model = model
-    def test(self):
+    def test(self,classes_num=None):
+        if classes_num is None:
+            classes_num = self.params.show_classes_num
         img_size = self.params.img_size
         img_channel = self.params.img_channel
-        classes_num = self.params.classes_num
         
-        img = torch.stack([self.dloader.img_grouped[i][0] for i in range(classes_num)])
+        img_list = []
+        for i in range(classes_num):
+            show_class = self.params.show_classes[i]
+            img = self.dloader.img_grouped[show_class[0]][show_class[1]]
+            img_list.append(img)
+        img = torch.stack(img_list)
+        img = img.to(device=device_CPU,dtype=dtype)
+        
         imgr=img.view(-1,img_channel,img_size,img_size)
         imgo = self.model(imgr.to(device=device,dtype=dtype))
-        imgo = imgo.view(-1,img_size*img_size).detach().to(device=device_CPU,dtype=dtype)
+        imgo = imgo.view(-1,img_channel*img_size*img_size).detach().to(device=device_CPU,dtype=dtype)
 
         #print(img.shape,imgo.shape,torch.cat((img,imgo)).shape)
         utils.show_images(torch.cat((img,imgo)),self.params)
@@ -76,7 +84,7 @@ class ClassifierSolver(Solver):
         self.dloader = dloader
         self.it_count = 1
     def train(self,epochs=1,freeze_enc = False, silence=False):
-        print_every = 1000
+        print_every = 100
         model = self.classifier
         model = model.to(device=device) # move the model parameters to device
         if freeze_enc==True:
@@ -100,12 +108,15 @@ class ClassifierSolver(Solver):
                 optimizer.step()
 
                 if silence==False and self.it_count % print_every == 0:
-                    print('iteration %d, loss = %.4f' % (self.it_count,loss.item()))
-                    self.test(mode = 'validation')
-                    print()
+                    acc = self.test(mode = 'validation', silence=True)
+                    print('iteration %d, loss = %.4f, acc=%.2f' % (self.it_count,loss.item(),acc),end='\r')
                 self.it_count += 1
+    def predict(self, x):
+        x = x.to(device=device, dtype=dtype)  # move to device, e.g. GPU
+        scores = self.classifier(x)
+        _, preds = scores.max(1)
+        return preds
     def test(self,mode='validation', silence=False):
-        model = self.classifier
         if mode=='validation':
             loader = self.dloader.loader_val
             if silence==False:
@@ -118,16 +129,18 @@ class ClassifierSolver(Solver):
             print("ERROR: wrong mode!")
         num_correct = 0
         num_samples = 0
-        model.eval()  # set model to evaluation mode
+        error_count = np.zeros(672)
+        error_dict = dict()
         with torch.no_grad():
             for x, y in loader:
                 x = x.to(device=device, dtype=dtype)  # move to device, e.g. GPU
                 y = y.to(device=device, dtype=torch.long)
-                scores = model(x)
-                _, preds = scores.max(1)
+                preds = self.predict(x)
                 num_correct += (preds == y).sum()
+                
                 num_samples += preds.size(0)
             acc = float(num_correct) / num_samples
+            
             
             if silence==False:
                 print('Got %d / %d correct (%.2f)' % (num_correct, num_samples, 100 * acc))
@@ -200,18 +213,22 @@ class DisAdvSolver(Solver):
             print("Unknown mode")
     def show_switch_latent(self, show_range = None):
         if show_range is None:
-            show_range = params.classes_num
+            show_range = self.params.show_classes_num
         s_latent=[]
         z_latent=[]
         img_lists = []
+        real_lists = []
         s_enc = self.s_enc
         z_enc = self.z_enc
         sz_dec = self.sz_dec
         img_size = self.params.img_size
         img_channel = self.params.img_channel
+        show_classes = self.params.show_classes
         
         for classi in range(show_range):
-            img = self.dloader.img_grouped[classi][0].view(1,img_channel,img_size,img_size)
+            show_class = show_classes[classi]
+            img = self.dloader.img_grouped[show_class[0]][show_class[1]].view(1,img_channel,img_size,img_size)
+            real_lists.append(self.dloader.img_grouped[show_class[0]][show_class[1]])
             img = img.to(device=device,dtype=dtype)
             
             s_latent.append( s_enc(img) )
@@ -220,11 +237,14 @@ class DisAdvSolver(Solver):
             for col in range( show_range ):
                 latent = torch.cat((s_latent[col],z_latent[row]),dim=1)
                 recon  = sz_dec(latent)
-                img_lists.append(recon.view( img_size*img_size ) )
+                img_lists.append(recon.view( img_channel*img_size*img_size ) )
                 
         utils.show_images(torch.stack(img_lists).detach().cpu().numpy(),self.params)
+        utils.show_images(torch.stack(real_lists).detach().cpu().numpy(),self.params)
                 
-    def show_interpolated(self, inter_step = 4, tuples=((2,18),(6,10))):
+    def show_interpolated(self, inter_step = 4, tuples=None):
+        if tuples is None:
+            tuples = self.params.interpolated_tuples
         img_size = self.params.img_size
         img_channel = self.params.img_channel
         
@@ -256,7 +276,7 @@ class DisAdvSolver(Solver):
                 z_latent =  (1-col_w) * z_lat1 + col_w * z_lat2
                 latent = torch.cat((s_latent,z_latent),dim=1)
                 recon  = sz_dec(latent)
-                img_lists.append(recon.view( img_size*img_size ) )
+                img_lists.append(recon.view( img_channel*img_size*img_size ) )
 
         utils.show_images(torch.stack(img_lists).detach().cpu().numpy(),self.params)
         
@@ -273,8 +293,10 @@ class DisAdvSolver(Solver):
         self.save_count = 0
         self.save_num = 6
         self.show_num = 1
-        self.save_every = dloader.iter_per_epoch * epochs // self.save_num
-        self.show_every = dloader.iter_per_epoch * epochs // self.show_num
+        #self.save_every = dloader.iter_per_epoch * epochs // self.save_num
+        self.save_every = 6000
+        #self.show_every = dloader.iter_per_epoch * epochs // self.show_num
+        self.show_every = 1000
         
         for epoch in range(epochs):
             for it, (x,y) in enumerate(dloader.loader_train):
@@ -321,8 +343,15 @@ class DisAdvSolver(Solver):
                     
                 if (self.it_count % self.log_every ==0):
                     self.train_log['loss'].append((disent_recon_loss, adv_loss, disent_loss))
-                    print('progress: %.2f, lastes loss, recon:%.4f, disent:%.4f, adv:%.4f ' % (self.cur_it_count/self.max_it_count, disent_recon_loss, disent_loss, adv_loss), end= '\r')
-
+                    print('progress: %.2f, total iter: %d, losses: recon:%.4f, disent:%.4f, adv:%.4f ' % (self.cur_it_count/self.max_it_count, self.it_count, disent_recon_loss, disent_loss, adv_loss), end= '\r')
+                    
+                if (self.it_count % self.show_every==0):
+                    print()
+                    self.show_switch_latent(10)
+                    self.show_interpolated(10)
+                    self.reconSolver.test()
+                    plt.show()
+                    print()
                     
                 if self.saving_while_training==True and self.it_count%self.save_every==0:
                     self.save_count += 1
@@ -331,17 +360,7 @@ class DisAdvSolver(Solver):
                 # it_count is total accumulated count, while cur_it_count is count in this training session
                 self.it_count += 1
                 self.cur_it_count += 1
-        
-        test_adv = nets.Z_AdvLayer(self.params)
-        z_enc_clone = copy.deepcopy(self.z_enc)
-        self.z_classifier = ClassifierSolver(z_enc_clone, test_adv, self.dloader, self.params)
-        adv_acc = self.z_classifier.test(mode='test')
 
-        self.test_disentangle()
-
-        self.show_switch_latent(8)
-        self.show_interpolated(8)
-        self.reconSolver.test()
         plt.show()
     def test_disentangle(self):
         # S_Classifier and Z_AdvLayer are same, except input dimension...

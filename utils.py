@@ -11,6 +11,7 @@ import torchvision.transforms as T
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torch.utils.data import sampler
+import torch.utils.data as data
 import torchvision.datasets as dset
 
 import matplotlib.pyplot as plt
@@ -40,6 +41,23 @@ class ChunkSampler(sampler.Sampler):
     def __len__(self):
         return self.num_samples
     
+class SpritesDataset(data.Dataset):
+    def __init__(self, image_dir, transform=None): 
+        super(SpritesDataset, self).__init__()
+        self.sprites, self.labels = torch.load(image_dir)
+        self.transform = transform
+        
+    def __getitem__(self, index):
+        img = self.sprites[index]
+        if self.transform:
+            img = self.transform(img)
+        label = self.labels[index]
+
+        return img, label
+
+    def __len__(self):
+        return self.sprites_loaded.shape[0]
+    
 class dataLoader():
     def __init__(self, dset_name, dset_path='./datasets/'):
         if dset_name == 'MNIST':
@@ -50,9 +68,28 @@ class dataLoader():
             self.setup_SPRITES()
         self.iter_per_epoch = self.NUM_TRAIN // self.batch_size
     def setup_SPRITES(self):
-        self.NUM_TRAIN = 50000
+        self.NUM_TRAIN = 45000
         self.NUM_VAL = 5000
         self.NUM_TEST= 5000
+        img_size = self.params.img_size
+        img_channel = self.params.img_channel
+        self.batch_size = self.params.batch_size
+        self.img_transform = T.Compose([
+            T.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        ])
+        
+        self.img_transform = None
+        
+        spritesData = SpritesDataset('./datasets/sprites_bow_shrinked_shuffled_data.pt', transform=self.img_transform)
+        
+        self.loader_train = DataLoader(spritesData, batch_size=self.batch_size,
+                                  sampler=ChunkSampler(self.NUM_TRAIN, 0))
+        self.loader_val = DataLoader(spritesData, batch_size=self.batch_size,
+                                sampler=ChunkSampler(self.NUM_VAL, self.NUM_TRAIN))
+        self.loader_test = DataLoader(spritesData, batch_size=self.batch_size,
+                                sampler=ChunkSampler(self.NUM_TEST,
+                                              self.NUM_TRAIN+self.NUM_VAL))
+        self.groupImages()
     def setup_MNIST(self):
         self.NUM_TRAIN = 50000
         self.NUM_VAL = 5000
@@ -62,41 +99,50 @@ class dataLoader():
 
         self.batch_size = self.params.batch_size
         
-        img_transform = T.Compose([
+        # hard-coded mean and variance of MNIST dataset
+        self.img_transform = T.Compose([
             T.ToTensor(),
-            T.Normalize((0,)*img_channel, (1,)*img_channel)
+            T.Normalize((0.1307,), (0.3081,))
         ])
 
         mnist_train = dset.MNIST('./datasets/MNIST_data', train=True, download=False,
-                                   transform=img_transform)
+                                   transform=self.img_transform) 
         self.loader_train = DataLoader(mnist_train, batch_size=self.batch_size,
                                   sampler=ChunkSampler(self.NUM_TRAIN, 0),num_workers=8)
 
         mnist_val = dset.MNIST('./datasets/MNIST_data', train=True, download=False,
-                                   transform=img_transform)
+                                   transform=self.img_transform)
         self.loader_val = DataLoader(mnist_val, batch_size=self.batch_size,
                                 sampler=ChunkSampler(self.NUM_VAL, self.NUM_TRAIN),num_workers=8)
 
         mnist_test = dset.MNIST('./datasets/MNIST_data', train=False, download=False,
-                                   transform=img_transform)
+                                   transform=self.img_transform)
         self.loader_test = DataLoader(mnist_test, batch_size=self.batch_size,
                                 sampler=ChunkSampler(self.NUM_TEST,0),num_workers=8)
-        
+        self.groupImages()
         # group images by class name
+
+    def groupImages(self):
+        img_size = self.params.img_size
+        img_channel = self.params.img_channel
         self.img_grouped = [[] for i in range(self.params.classes_num)]
         for it, (xbat,ybat) in enumerate(self.loader_test):
             for i in range(len(ybat)):
                 x = xbat[i]
                 y = ybat[i]
-                self.img_grouped[y.item()].append( x.view(img_size ** 2) )
+                self.img_grouped[y.item()].append( x.view(img_channel*(img_size ** 2)) )
                 
         self.imgs = self.loader_test.__iter__().next()[0].view(self.batch_size, img_channel*img_size*img_size).numpy().squeeze()
         
-    def show_imgs(self):
-        showed = [self.img_grouped[2][i] for i in range(20)]
-        showed += [self.img_grouped[6][i] for i in range(20)]
+    def show_imgs(self,classes=[332,59],show_num=5):
+        if show_num>5:
+            print("WARNING! show_num is too large, may cause index out of range error")
+        showed=[]
+        for cls in classes:
+            print(cls)
+            showed += [self.img_grouped[cls][i] for i in range(show_num)]
         torch.stack(showed)
-        utils.show_images(torch.stack(showed))
+        show_images(torch.stack(showed),self.params)
 
 def print_info():
     print(torch.__version__)
@@ -108,7 +154,7 @@ def show_images(images,params):
     img_size = params.img_size
     img_channel = params.img_channel
     
-    images = torch.tensor(images)
+    images = torch.tensor(images).cpu()
     images = images.view([images.shape[0], img_channel, img_size, img_size])  # images reshape to (batch_size, D)
     sqrtn = int(np.ceil(np.sqrt(images.shape[0])))
     sqrtimg = img_size

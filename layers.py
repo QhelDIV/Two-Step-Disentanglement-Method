@@ -8,7 +8,7 @@ import numpy as np
 from config import VERBOSE
 
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
+import matplotlib.gridspec as gridspec 
 
 class ConvLayer(nn.Module):
     def __init__(self, in_channel,  conv_channel, filter_size, stride=1, padding = 0, bn=False, upsampling=False):
@@ -18,6 +18,7 @@ class ConvLayer(nn.Module):
         # nn.init package contains convenient initialization methods
         # http://pytorch.org/docs/master/nn.html#torch-nn-init 
         nn.init.kaiming_normal_(self.conv.weight)
+        self.conv.bias.data.fill_(0)
         
         self.use_bn = bn
         self.upsampling = upsampling
@@ -44,6 +45,7 @@ class Dense(nn.Module):
         
         self.dense = nn.Linear(in_channel, out_channel)
         nn.init.kaiming_normal_(self.dense.weight)
+        self.dense.bias.data.fill_(0)
         
         self.use_bn = bn
         if bn == True:
