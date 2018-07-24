@@ -218,6 +218,7 @@ class DisAdvSolver(Solver):
         z_latent=[]
         img_lists = []
         real_lists = []
+        ground_truth_list = []
         s_enc = self.s_enc
         z_enc = self.z_enc
         sz_dec = self.sz_dec
@@ -225,15 +226,22 @@ class DisAdvSolver(Solver):
         img_channel = self.params.img_channel
         show_classes = self.params.show_classes
         
+        # first image is a black one
+        img_lists.append( torch.tensor( np.zeros(img_channel*img_size*img_size) ).to(device=device,dtype=dtype)  )
+        
         for classi in range(show_range):
             show_class = show_classes[classi]
             img = self.dloader.img_grouped[show_class[0]][show_class[1]].view(1,img_channel,img_size,img_size)
             real_lists.append(self.dloader.img_grouped[show_class[0]][show_class[1]])
             img = img.to(device=device,dtype=dtype)
             
+            ground_truth_list.append( img.view( img_channel*img_size*img_size ) )
             s_latent.append( s_enc(img) )
             z_latent.append( z_enc(img) )
+        img_lists.extend( ground_truth_list )
+            
         for row in range( show_range ):
+            img_lists.append( ground_truth_list[row] )
             for col in range( show_range ):
                 latent = torch.cat((s_latent[col],z_latent[row]),dim=1)
                 recon  = sz_dec(latent)
@@ -294,9 +302,9 @@ class DisAdvSolver(Solver):
         self.save_num = 6
         self.show_num = 1
         #self.save_every = dloader.iter_per_epoch * epochs // self.save_num
-        self.save_every = 6000
+        self.save_every = 10000
         #self.show_every = dloader.iter_per_epoch * epochs // self.show_num
-        self.show_every = 1000
+        self.show_every = 10000
         
         for epoch in range(epochs):
             for it, (x,y) in enumerate(dloader.loader_train):
@@ -353,9 +361,9 @@ class DisAdvSolver(Solver):
                     plt.show()
                     print()
                     
-                if self.saving_while_training==True and self.it_count%self.save_every==0:
+                if ((self.saving_while_training==True) and (self.it_count%self.save_every==0)):
                     self.save_count += 1
-                    self.save_model(suffix = self.model_name+'_num'+str(self.save_count))
+                    self.save_model(suffix = self.model_name+'_num'+str(self.it_count))
                     print()
                 # it_count is total accumulated count, while cur_it_count is count in this training session
                 self.it_count += 1

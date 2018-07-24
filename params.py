@@ -20,7 +20,7 @@ class Parameters:
         self.adv_disent_ratio = 4
         
         self.recon_w  = 1
-        self.adv_w   = -.5
+        self.adv_w   = -0.5
         
         # enc, dec config
         self.encdec_dense_size   = 256
@@ -67,10 +67,10 @@ class SPRITESParameters(Parameters):
         self.img_size    = 32
         self.img_channel = 3
         self.classes_num = 336
-        self.batch_size = 128
+        self.batch_size = 256
         
         self.show_classes_num = 10
-        self.show_classes = [(1,0),(4,0),(50,0),(100,0),(150,0),(200,0),(225,0),(250,0),(275,0),(300,0)]
+        self.show_classes = [(1,0),(4,4),(50,3),(100,3),(160,3),(65,3),(210,0),(235,1),(330,8),(300,0)]
         
         self.interpolated_tuples = ((59,2),(332,2))
         

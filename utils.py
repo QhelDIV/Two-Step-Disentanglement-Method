@@ -169,7 +169,7 @@ def show_images(images,params):
         ax.set_xticklabels([])
         ax.set_yticklabels([])
         ax.set_aspect('equal')
-        img = img.permute(1,2,0).numpy()
+        img = img.permute(1,2,0).clamp(0.,1.).numpy()
         if img.shape[2]==1:
             img = img.reshape(img.shape[0],img.shape[1])
         plt.imshow(img)
